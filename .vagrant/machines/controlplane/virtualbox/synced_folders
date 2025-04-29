@@ -1,0 +1,1 @@
+{"virtualbox":{"/home/vagrant/volumes/":{"guestpath":"/home/vagrant/volumes","hostpath":"/home/doko/k8s_cluster/volumes/controlplane","disabled":false,"__vagrantfile":true},"/vagrant":{"guestpath":"/vagrant","hostpath":"/home/doko/k8s_cluster","disabled":false,"__vagrantfile":true}}}

@@ -6,6 +6,10 @@ VM = {
   'node1' => {
     ip_public: '192.168.1.3',
     ip_private: '192.168.56.3'
+  },
+  'nfs' => {
+    ip_public: '192.168.1.4',
+    ip_private: '192.168.56.4'
   }
 }
 # -*- mode: ruby -*-
@@ -24,38 +28,60 @@ Vagrant.configure("2") do |config|
   # boxes at https://vagrantcloud.com/search.
   config.vm.box = "ubuntu/jammy64"
   
+  # NFS Server
+  config.vm.define "nfs" do |nfs|
+    nfs.vm.hostname = "nfs"
+    
+    # IP
+    nfs.vm.network "public_network", ip: VM['nfs'][:ip_public], bridge: "enp42s0"
+    #nfs.vm.network "private_network", ip: VM['nfs'][:ip_private]
+    
+    # Provision
+    nfs.vm.provision "shell", path: "provision-nfs.sh"
+    
+    # Disk size
+    nfs.disksize.size = '500GB'
+  end
+
   # Controlplane
   config.vm.define "controlplane" do |controlplane|
     controlplane.vm.hostname = "controlplane"
+    
+    # IP
     controlplane.vm.network "public_network", ip: VM['controlplane'][:ip_public], bridge: "enp42s0"
     #controlplane.vm.network "private_network", ip: VM['controlplane'][:ip_private]
+    
+    # Volume
     controlplane.vm.synced_folder "/home/doko/k8s_cluster/volumes/controlplane", "/home/vagrant/volumes/"
+    
+    # Provision
+    controlplane.vm.provision "shell", path: "provision-k8s.sh"
+    controlplane.vm.provision "shell", path: "provision-controlplane.sh"
 
-    controlplane.vm.provision "shell", inline: <<-SHELL
-      sudo rm -rf /usr/lib/systemd/system/kubelet.service.d/10-kubeadm.conf
-      sudo ln -s /home/vagrant/volumes/10-kubeadm.conf /usr/lib/systemd/system/kubelet.service.d/10-kubeadm.conf 
-      sudo systemctl daemon-reload
-      ln -s /home/vagrant/volumes/etcd-backup.sh /home/vagrant/etcd_backup/etcd-backup.sh
-      sudo chmod +x /home/vagrant/etcd_backup/etcd-backup.sh
-      sudo chown vagrant: /home/vagrant/etcd_backup/etcd-backup.sh
-      sudo reboot
-    SHELL
+    # Disk size
+    controlplane.disksize.size = '75GB'
   end
 
   # Node1
   config.vm.define "node1" do |node1|
     node1.vm.hostname = "node1"
+
+    # IP
     node1.vm.network "public_network", ip: VM['node1'][:ip_public], bridge: "enp42s0"
     #node1.vm.network "private_network", ip: VM['node1'][:ip_private]
+    
+    # Volume
     node1.vm.synced_folder "/home/doko/k8s_cluster/volumes/node1", "/home/vagrant/volumes/"
-
+    
+    # Provision
+    node1.vm.provision "shell", path: "provision-k8s.sh"
     node1.vm.provision "shell", inline: <<-SHELL
-      cp /home/vagrant/volumes/10-kubeadm.conf /usr/lib/systemd/system/kubelet.service.d/10-kubeadm.conf 
-      sudo systemctl daemon-reload
       sudo reboot
     SHELL
-  end
 
+    # Disk size
+    node1.disksize.size = '75GB'
+  end
 
   # Disable automatic box update checking. If you disable this, then
   # boxes will only be checked for updates when the user runs
@@ -108,8 +134,6 @@ Vagrant.configure("2") do |config|
      vb.cpus = 2
    end
   
-  # Disk size
-  config.disksize.size = '250GB'
   
   #
   # View the documentation for the provider you are using for more
@@ -118,7 +142,6 @@ Vagrant.configure("2") do |config|
   # Enable provisioning with a shell script. Additional provisioners such as
   # Ansible, Chef, Docker, Puppet and Salt are also available. Please see the
   # documentation for more information about their specific syntax and use.
-   config.vm.provision "shell", path: "provision.sh"
    #config.vm.provision "shell", inline: <<-SHELL
    # sudo apt update
    #SHELL

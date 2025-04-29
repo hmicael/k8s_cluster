@@ -59,35 +59,23 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.
 sudo apt-get update
 sudo apt-get install helm -y
 
+# Add csi.driver.nfs
+helm repo add csi-driver-nfs https://raw.githubusercontent.com/kubernetes-csi/csi-driver-nfs/master/charts
+
 # Install Kustomize
 curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"  | bash
 sudo ln -n ./kustomize /usr/bin/
 
-# START script controlplane
-if [ "$(hostname)" = "controlplane" ]; then
-  # Installer ETCD
-  ETCD_VER=v3.6.0-rc.4
-  DOWNLOAD_URL=https://storage.googleapis.com/etcd
+# Install & Setup NFS
+sudo apt install nfs-common -y
+sudo mkdir -p /nfs/general
+echo "192.168.1.4:/srv/nfs/k8s /nfs/general nfs auto,nofail,noatime,nolock,intr,tcp,actimeo=1800 0 0" | sudo tee -a /etc/fstab > /dev/null
 
-  mkdir -p /home/vagrant/etcd_backup/
-  mkdir -p /home/vagrant/etcd
-
-  rm -f /tmp/etcd-${ETCD_VER}-linux-amd64.tar.gz
-  curl -L ${DOWNLOAD_URL}/${ETCD_VER}/etcd-${ETCD_VER}-linux-amd64.tar.gz -o /tmp/etcd-${ETCD_VER}-linux-amd64.tar.gz
-  tar xzvf /tmp/etcd-${ETCD_VER}-linux-amd64.tar.gz -C /home/vagrant/etcd --strip-components=1
-  rm -f /tmp/etcd-${ETCD_VER}-linux-amd64.tar.gz
-  ln -sf /home/vagrant/etcd/etcdctl /usr/bin/etcdctl
-
-  # Ajouter au crontab pour backup à chaque reboot
-  (crontab -l 2>/dev/null; echo "@reboot /home/vagrant/etcd_backup/etcd-backup.sh >> /home/vagrant/etcd_backup/backup.log 2>&1") | crontab -
-
-  # Install Argocd
-  curl -sSL -o argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
-  sudo install -m 555 argocd-linux-amd64 /usr/local/bin/argocd
-  rm argocd-linux-amd64
-  mkdir argocd
-fi
-# END HOSTNAME Controlplane
+# Config kubelet.service configuration file
+sudo rm -rf /usr/lib/systemd/system/kubelet.service.d/10-kubeadm.conf
+sudo ln -s /home/vagrant/volumes/10-kubeadm.conf /usr/lib/systemd/system/kubelet.service.d/10-kubeadm.conf
+sudo systemctl daemon-reload
+sudo systemctl restart kubelet
 
 chown -R vagrant: /home/vagrant
 usermod -aG admin vagrant
